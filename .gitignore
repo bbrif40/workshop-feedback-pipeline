@@ -1,0 +1,7 @@
+package/
+ingest.zip
+.runtime.env
+__pycache__/
+*.pyc
+preflight/*.json
+preflight/*-error.txt
