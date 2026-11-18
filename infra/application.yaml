@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Event-driven workshop feedback upload recorder
+
+Parameters:
+  DataBucketName:
+    Type: String
+  StatusTableName:
+    Type: String
+  StatusTableArn:
+    Type: String
+  CodeKey:
+    Type: String
+    Default: artifacts/ingest.zip
+
+Resources:
+  IngestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-ingest'
+
+  IngestRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteStatusAndLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: WriteUploadStatus
+                Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !Ref StatusTableArn
+              - Sid: WriteOneLogGroup
+                Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}-ingest:*'
+
+  IngestFunction:
+    Type: AWS::Lambda::Function
+    DependsOn: IngestLogGroup
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-ingest'
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      Role: !GetAtt IngestRole.Arn
+      Code:
+        S3Bucket: !Ref DataBucketName
+        S3Key: !Ref CodeKey
+      Environment:
+        Variables:
+          STATUS_TABLE: !Ref StatusTableName
+
+  UploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref DataBucketName
+      Targets:
+        - Arn: !GetAtt IngestFunction.Arn
+          Id: IngestTarget
+
+  AllowEventBridgeInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IngestFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt UploadRule.Arn

@@ -1,0 +1,1 @@
+This synthetic text file should expose that the initial bucket-wide EventBridge rule is too broad.
