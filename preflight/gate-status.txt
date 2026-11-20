@@ -1,1 +1,1 @@
-GO
+STOP: Amazon Comprehend invocation failed. Review preflight/comprehend-error.txt and classify account-plan access before changing IAM.
